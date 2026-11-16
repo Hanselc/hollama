@@ -3,9 +3,11 @@
 	import { toast } from 'svelte-sonner';
 
 	import { beforeNavigate } from '$app/navigation';
-	import { type ChatRequest, type ChatStrategy } from '#lib/chat/index.js';
+	import { runChatAgent } from '#lib/chat/agent.js';
+	import { type ChatRequest, type ChatStrategy, type ToolCallRecord } from '#lib/chat/index.js';
 	import { OllamaStrategy } from '#lib/chat/ollama.js';
 	import { OpenAIStrategy } from '#lib/chat/openai.js';
+	import { executeWebTool, getWebBrowsingSystemPrompt, getWebTools } from '#lib/chat/tools.js';
 	import Button from '#lib/components/Button.svelte';
 	import ButtonCopy from '#lib/components/ButtonCopy.svelte';
 	import ButtonDelete from '#lib/components/ButtonDelete.svelte';
@@ -156,29 +158,55 @@
 		await handleCompletion(session.messages);
 	}
 
+	const MAX_SAVED_TOOL_RESULT_LENGTH = 4_000;
+
+	function serializeToolCalls(toolCalls: ToolCallRecord[] | undefined) {
+		if (!toolCalls?.length) return undefined;
+
+		return toolCalls.map((call) =>
+			call.result && call.result.length > MAX_SAVED_TOOL_RESULT_LENGTH
+				? {
+						...call,
+						result: `${call.result.slice(0, MAX_SAVED_TOOL_RESULT_LENGTH).trimEnd()}\n\n[Result truncated]`
+					}
+				: call
+		);
+	}
+
 	async function handleCompletion(messages: Message[]) {
 		editor.abortController = new AbortController();
 		editor.isCompletionInProgress = true;
 		editor.prompt = '';
 		editor.completion = '';
 		editor.reasoning = '';
+		editor.toolCalls = [];
 
+		const settings = $settingsStore;
 		const server = $serversStore.find((s) => s.id === session.model?.serverId);
 		if (!server) throw new Error('Server not found');
 		if (!session.model?.name) throw new Error('No model');
 
-		let chatMessages = session.systemPrompt.content
-			? [session.systemPrompt, ...messages]
-			: messages;
+		const systemMessages: Message[] = session.systemPrompt.content ? [session.systemPrompt] : [];
+		if (session.webBrowsing) {
+			systemMessages.push({
+				role: 'system',
+				content: getWebBrowsingSystemPrompt(settings)
+			});
+		}
+
+		const chatMessages = [...systemMessages, ...messages];
 
 		// Map messages for the chat request, converting images if necessary
 		const chatMessagesForRequest = chatMessages.map((msg) => {
 			// Ollama expects images as base64 strings without filename
 			const images = msg.images?.map((img) => img.data);
-			return {
+			const message = {
 				...msg,
 				images // Override images with just the data
 			};
+			// Tool calls were already resolved for previous turns; don't replay them.
+			delete message.toolCalls;
+			return message;
 		});
 
 		let chatRequest: ChatRequest = {
@@ -211,15 +239,28 @@
 				}
 			);
 
-			await strategy.chat(
-				chatRequest,
-				editor.abortController.signal,
-				async ({ content, reasoning }) => {
+			const toolCalls = await runChatAgent({
+				strategy,
+				request: chatRequest,
+				tools: session.webBrowsing ? getWebTools(settings) : [],
+				signal: editor.abortController.signal,
+				executeTool: (call, signal) => executeWebTool(call, settings, signal),
+				onChunk: async ({ content, reasoning }) => {
 					if (reasoning) editor.reasoning += reasoning;
 					if (content) reasoningProcessor.processChunk(content);
 					await scrollToBottom();
+				},
+				onToolCall: (toolCall) => {
+					const calls = [...(editor.toolCalls ?? [])];
+					const index = calls.findIndex((existing) => existing.id === toolCall.id);
+					if (index === -1) calls.push(toolCall);
+					else calls[index] = toolCall;
+					editor.toolCalls = calls;
+					scrollToBottom();
 				}
-			);
+			});
+
+			editor.toolCalls = toolCalls;
 
 			// Finalize processing of any remaining content
 			reasoningProcessor.finalize();
@@ -227,7 +268,8 @@
 			const message: Message = {
 				role: 'assistant',
 				content: editor.completion,
-				reasoning: editor.reasoning
+				reasoning: editor.reasoning,
+				toolCalls: serializeToolCalls(toolCalls)
 			};
 
 			session.messages = [...session.messages, message];
@@ -236,6 +278,7 @@
 
 			editor.completion = '';
 			editor.reasoning = '';
+			editor.toolCalls = [];
 			editor.shouldFocusTextarea = true;
 			editor.isCompletionInProgress = false;
 			await scrollToBottom();
@@ -249,12 +292,15 @@
 	function stopCompletion() {
 		editor.abortController?.abort();
 
+		const toolCalls = editor.toolCalls ?? [];
+
 		// Add the incomplete message to session if there's any content
-		if (editor.completion || editor.reasoning) {
+		if (editor.completion || editor.reasoning || toolCalls.length) {
 			const message: Message = {
 				role: 'assistant',
 				content: editor.completion || '',
-				reasoning: editor.reasoning || ''
+				reasoning: editor.reasoning || '',
+				toolCalls: serializeToolCalls(toolCalls)
 			};
 			session.messages = [...session.messages, message];
 			session.updatedAt = new Date().toISOString();
@@ -264,6 +310,7 @@
 		// Clear editor state
 		editor.completion = '';
 		editor.reasoning = '';
+		editor.toolCalls = [];
 		editor.isCompletionInProgress = false;
 		editor.shouldFocusTextarea = true;
 	}
@@ -284,6 +331,7 @@
 		editor.abortController?.abort();
 		editor.completion = '';
 		editor.reasoning = '';
+		editor.toolCalls = [];
 		editor.isCompletionInProgress = false;
 		editor.shouldFocusTextarea = true;
 	}

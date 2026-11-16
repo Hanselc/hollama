@@ -12,6 +12,8 @@ export interface Model {
 	modifiedAt?: Date;
 }
 
+export type WebSearchProvider = 'tavily' | 'exa';
+
 export interface Settings {
 	models: Model[];
 	lastUsedModels: Model[];
@@ -21,6 +23,9 @@ export interface Settings {
 	userLanguage: Locale | null;
 	sidebarExpanded: boolean;
 	hollamaMetadata: HollamaMetadata;
+	webSearchProvider?: WebSearchProvider;
+	tavilyApiKey?: string;
+	exaApiKey?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,5 +39,6 @@ export const DEFAULT_SETTINGS: Settings = {
 	hollamaMetadata: {
 		currentVersion: version,
 		isDocker: PUBLIC_ADAPTER === 'docker-node'
-	}
+	},
+	webSearchProvider: 'tavily'
 };

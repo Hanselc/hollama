@@ -6,10 +6,35 @@ import type { Model } from '#lib/settings.js';
 
 import { type OllamaOptions } from './ollama';
 
+export interface ToolCall {
+	id: string;
+	name: string;
+	arguments: Record<string, unknown>;
+}
+
+export interface ToolCallRecord extends ToolCall {
+	status: 'running' | 'completed' | 'error';
+	result?: string;
+	error?: string;
+	provider?: string;
+}
+
+export interface ToolDefinition {
+	type: 'function';
+	function: {
+		name: string;
+		description: string;
+		parameters: Record<string, unknown>;
+	};
+}
+
 export interface Message {
-	role: 'user' | 'assistant' | 'system';
+	role: 'user' | 'assistant' | 'system' | 'tool';
 	content: string;
 	images?: string[]; // Optional array of base64 image strings
+	toolCalls?: ToolCall[];
+	toolName?: string;
+	toolCallId?: string;
 }
 
 export interface ChatRequest {
@@ -17,6 +42,8 @@ export interface ChatRequest {
 	messages: Message[];
 	stream?: boolean;
 	options?: Partial<OllamaOptions>;
+	tools?: ToolDefinition[];
+	toolChoice?: 'auto' | 'none';
 }
 
 export interface ChatChunk {
@@ -24,12 +51,18 @@ export interface ChatChunk {
 	reasoning?: string;
 }
 
+export interface ChatResult {
+	content: string;
+	reasoning: string;
+	toolCalls: ToolCall[];
+}
+
 export interface ChatStrategy {
 	chat(
 		payload: ChatRequest,
 		abortSignal: AbortSignal,
 		onChunk: (chunk: ChatChunk) => void
-	): Promise<void>;
+	): Promise<ChatResult>;
 
 	getModels(): Promise<Model[]>;
 

@@ -53,7 +53,8 @@
 		message={{
 			role: 'assistant',
 			content: editor.completion || '...',
-			reasoning: editor.reasoning
+			reasoning: editor.reasoning,
+			toolCalls: editor.toolCalls
 		}}
 		isStreamingArticle={true}
 		currentRawReasoning={editor.reasoning}

@@ -6,6 +6,7 @@
 	import Interface from './Interface.svelte';
 	import Servers from './Servers.svelte';
 	import Version from './Version.svelte';
+	import WebBrowsing from './WebBrowsing.svelte';
 </script>
 
 <Head title={m.settings()} />
@@ -14,6 +15,7 @@
 	<div class="settings-fieldsets">
 		<Version />
 		<Servers />
+		<WebBrowsing />
 		<Interface />
 		<DataManagement />
 	</div>

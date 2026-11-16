@@ -600,11 +600,13 @@ test.describe('Session interaction', () => {
 		expect(page.url()).toContain('/sessions/');
 
 		// Now verify that navigating outside /sessions/ does trigger a dialog
-		const dialogPromise = page.waitForEvent('dialog');
+		let dialogMessage = '';
+		page.once('dialog', async (dialog) => {
+			dialogMessage = dialog.message();
+			await dialog.dismiss();
+		});
 		await page.getByText('Settings', { exact: true }).click();
-		const dialog = await dialogPromise;
-		expect(dialog.message()).toContain('You have unsaved changes that will be lost');
-		await dialog.dismiss();
+		await expect.poll(() => dialogMessage).toContain('You have unsaved changes that will be lost');
 
 		// Verify we're still on the session page (navigation was canceled)
 		await expect(promptTextarea).toHaveValue('This is an unsaved prompt');
