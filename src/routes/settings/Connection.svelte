@@ -139,6 +139,19 @@
 							</svelte:fragment>
 						</FieldInput>
 					{/if}
+
+					{#if server.connectionType === ConnectionType.OpenAICompatible}
+						<div class="col-span-2 flex flex-col">
+							<FieldCheckbox
+								name={`useProxy-${server.id}`}
+								label={m.useProxy()}
+								bind:checked={server.useProxy}
+							/>
+							<FieldHelp>
+								<P>{m.useProxyHelp()}</P>
+							</FieldHelp>
+						</div>
+					{/if}
 				</div>
 				<FieldInput
 					name={`modelsFilter-${server.id}`}

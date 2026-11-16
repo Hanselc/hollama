@@ -3,6 +3,7 @@
 - [Getting started](#getting-started)
 - [Updating to the latest version](#updating-to-the-latest-version)
 - [Connecting to an Ollama server hosted elsewhere](#connecting-to-an-ollama-server-hosted-elsewhere)
+- [Configuring the OpenAI-compatible proxy](#configuring-the-openai-compatible-proxy)
 - [Configuring allowed hosts](#configuring-allowed-hosts)
 
 ## Getting started
@@ -42,6 +43,22 @@ If you are using the publicly hosted version or your Docker server is on a separ
 ```bash
 OLLAMA_ORIGINS=https://hollama.fernando.is ollama serve
 ```
+
+## Configuring the OpenAI-compatible proxy
+
+OpenAI-compatible connections can enable **Use Hollama proxy** in their connection settings. This forwards requests through the Hollama server, which is useful for providers that block browser requests, such as Ollama Cloud.
+
+By default, the proxy allows public HTTPS hosts and rejects loopback/private hostnames and IP-literal targets. To restrict or permit specific hosts, set `PROXY_ALLOWED_HOSTS`:
+
+```shell
+docker run --rm -d -p 4173:4173 \
+  -e PROXY_ALLOWED_HOSTS='ollama.com,llm.internal' \
+  --name hollama ghcr.io/fmaclen/hollama:latest
+```
+
+When `PROXY_ALLOWED_HOSTS` is set, only those hosts are allowed. To allow plain HTTP targets, set `PROXY_ALLOW_INSECURE=true`.
+
+API keys are forwarded through the Hollama server for each request but are not stored server-side.
 
 ## Configuring allowed hosts
 
