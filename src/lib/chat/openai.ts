@@ -5,10 +5,17 @@ import type {
 	ChatCompletionMessageParam
 } from 'openai/resources/index.mjs';
 
-import type { Server } from '#lib/connections.js';
+import { ConnectionType, type Server } from '#lib/connections.js';
 import type { Model } from '#lib/settings.js';
 
 import type { ChatChunk, ChatRequest, ChatStrategy, Message } from './index';
+
+const PROXY_TARGET_HEADER = 'x-hollama-proxy-target';
+
+function proxyBaseURL() {
+	const origin = typeof window !== 'undefined' ? window.location.origin : '';
+	return new URL('/api/openai-proxy', origin || 'http://localhost').toString();
+}
 
 // Not part of OpenAI's spec: Ollama and OpenRouter stream reasoning as `reasoning`,
 // DeepSeek and vLLM as `reasoning_content`.
@@ -21,11 +28,21 @@ export class OpenAIStrategy implements ChatStrategy {
 	private openai: OpenAI;
 
 	constructor(private server: Server) {
+		const useProxy =
+			this.server.connectionType === ConnectionType.OpenAICompatible && this.server.useProxy;
+
 		this.openai = new OpenAI({
-			baseURL: this.server.baseUrl,
+			baseURL: useProxy ? proxyBaseURL() : this.server.baseUrl,
 			// The SDK rejects an empty key, but servers like llama.cpp don't need one
 			apiKey: this.server.apiKey || 'none',
-			dangerouslyAllowBrowser: true
+			dangerouslyAllowBrowser: true,
+			...(useProxy
+				? {
+						defaultHeaders: {
+							[PROXY_TARGET_HEADER]: this.server.baseUrl
+						}
+					}
+				: {})
 		});
 	}
 

@@ -15,6 +15,7 @@ export interface Server {
 	label?: string;
 	modelFilter?: string;
 	apiKey?: string;
+	useProxy?: boolean;
 }
 
 export function getDefaultServer(connectionType: ConnectionType): Server {

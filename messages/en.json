@@ -152,6 +152,8 @@
 	"useMlock": "Use MLOCK",
 	"useMmap": "Use MMAP",
 	"useModelsFromThisServer": "Use models from this server",
+	"useProxy": "Use Hollama proxy",
+	"useProxyHelp": "Forward requests through this Hollama server. Use this when the provider blocks browser requests. The API key is forwarded per request but not stored.",
 	"verify": "Verify",
 	"version": "Version",
 	"vocabOnly": "Vocab only",
