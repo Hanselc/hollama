@@ -13,6 +13,7 @@
 	import { Sitemap } from '#lib/sitemap.js';
 
 	import AttachmentImage from './AttachmentImage.svelte';
+	import ToolCalls from './ToolCalls.svelte';
 
 	let {
 		message,
@@ -148,6 +149,9 @@
 					</article>
 				{/if}
 			</div>
+		{/if}
+		{#if message.toolCalls?.length}
+			<ToolCalls toolCalls={message.toolCalls} />
 		{/if}
 		{#if message.content}
 			<Markdown markdown={message.content} />

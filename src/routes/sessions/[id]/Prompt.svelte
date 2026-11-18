@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Brain, CircleStop, Image, LoaderCircle, UnfoldVertical } from '@lucide/svelte';
+	import { Brain, CircleStop, Globe, Image, LoaderCircle, UnfoldVertical } from '@lucide/svelte';
 	import MessageSquareText from '@lucide/svelte/icons/message-square-text';
 	import Settings_2 from '@lucide/svelte/icons/settings-2';
 	import Trash_2 from '@lucide/svelte/icons/trash-2';
@@ -12,9 +12,9 @@
 	import FieldTextEditor from '#lib/components/FieldTextEditor.svelte';
 	import { ConnectionType } from '#lib/connections.js';
 	import { loadKnowledge, type Knowledge } from '#lib/knowledge.js';
-	import { knowledgeStore, serversStore } from '#lib/localStorage.js';
+	import { knowledgeStore, serversStore, sessionsStore } from '#lib/localStorage.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import type { Editor, Message, Session } from '#lib/sessions.js';
+	import { saveSession, type Editor, type Message, type Session } from '#lib/sessions.js';
 	import { generateRandomId } from '#lib/utils.js';
 
 	import AttachmentImage from './AttachmentImage.svelte';
@@ -86,6 +86,11 @@
 			return;
 		}
 		editor.view = 'controls';
+	}
+
+	function toggleWebBrowsing() {
+		session.webBrowsing = !session.webBrowsing;
+		if ($sessionsStore.some((s) => s.id === session.id)) saveSession(session);
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -384,6 +389,17 @@
 					title={m.attachImage()}
 				>
 					<Image class="base-icon" />
+				</Button>
+				<Button
+					variant={session.webBrowsing ? 'default' : 'outline'}
+					onclick={toggleWebBrowsing}
+					data-testid="web-browsing-toggle"
+					title={m.webBrowsing()}
+					aria-label={m.webBrowsing()}
+					aria-pressed={session.webBrowsing ?? false}
+					disabled={editor.isCompletionInProgress}
+				>
+					<Globe class="base-icon" />
 				</Button>
 			</div>
 

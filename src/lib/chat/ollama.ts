@@ -1,5 +1,4 @@
 import type {
-	ChatRequest,
 	ChatResponse,
 	ErrorResponse,
 	ListResponse,
@@ -11,14 +10,53 @@ import type {
 import type { Server } from '#lib/connections.js';
 import type { Model } from '#lib/settings.js';
 
-import type { ChatChunk, ChatStrategy } from './index';
+import type { ChatChunk, ChatRequest, ChatResult, ChatStrategy, Message, ToolCall } from './index';
+
+type OllamaToolCall = {
+	id?: string;
+	function?: { name?: string; arguments?: unknown };
+};
 
 // Reasoning models stream their thoughts in `thinking`, separate from `content`.
 // Ollama can also report an error mid-stream on a line of its own.
 type OllamaChatLine = Partial<ChatResponse> & {
-	message?: { content?: string; thinking?: string };
+	message?: { content?: string; thinking?: string; tool_calls?: OllamaToolCall[] };
 	error?: string;
 };
+
+function parseToolArguments(value: unknown): Record<string, unknown> {
+	if (typeof value === 'string') {
+		try {
+			const parsed = JSON.parse(value);
+			return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+		} catch {
+			return {};
+		}
+	}
+	return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function toOllamaMessage(message: Message) {
+	const { toolCalls, toolName, toolCallId, ...rest } = message;
+
+	return {
+		...rest,
+		...(toolCalls?.length
+			? {
+					tool_calls: toolCalls.map((call, index) => ({
+						id: call.id,
+						function: {
+							index,
+							name: call.name,
+							arguments: call.arguments
+						}
+					}))
+				}
+			: {}),
+		...(toolName ? { tool_name: toolName } : {}),
+		...(toolCallId ? { tool_call_id: toolCallId } : {})
+	};
+}
 
 export interface OllamaOptions {
 	numa: boolean;
@@ -63,16 +101,23 @@ export class OllamaStrategy implements ChatStrategy {
 		payload: ChatRequest,
 		abortSignal: AbortSignal,
 		onChunk: (chunk: ChatChunk) => void
-	): Promise<void> {
+	): Promise<ChatResult> {
 		const response = await fetch(`${this.server.baseUrl}/api/chat`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'text/event-stream' },
-			body: JSON.stringify(payload),
+			body: JSON.stringify({
+				model: payload.model,
+				options: payload.options,
+				messages: payload.messages.map(toOllamaMessage),
+				stream: payload.stream,
+				...(payload.tools?.length ? { tools: payload.tools } : {})
+			}),
 			signal: abortSignal
 		});
 
 		if (!response.body) throw new Error('Ollama response is missing body');
 
+		const result: ChatResult = { content: '', reasoning: '', toolCalls: [] };
 		const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
 		// A network read can end partway through a JSON line, so hold the
 		// unfinished tail until the rest of it arrives.
@@ -92,20 +137,40 @@ export class OllamaStrategy implements ChatStrategy {
 
 			const lines = (buffer + value).split('\n');
 			buffer = lines.pop() ?? '';
-			for (const line of lines) this.handleChatLine(line, onChunk);
+			for (const line of lines) this.handleChatLine(line, onChunk, result);
 		}
 
-		this.handleChatLine(buffer, onChunk);
+		this.handleChatLine(buffer, onChunk, result);
+		return result;
 	}
 
-	private handleChatLine(line: string, onChunk: (chunk: ChatChunk) => void) {
+	private handleChatLine(line: string, onChunk: (chunk: ChatChunk) => void, result: ChatResult) {
 		if (!line.trim()) return;
 
 		const chatResponse = JSON.parse(line) as OllamaChatLine;
 		if (chatResponse.error) throw new Error(chatResponse.error);
 
-		const { content, thinking } = chatResponse.message ?? {};
-		if (content || thinking) onChunk({ content, reasoning: thinking });
+		const { content, thinking, tool_calls } = chatResponse.message ?? {};
+		if (content || thinking) {
+			result.content += content ?? '';
+			result.reasoning += thinking ?? '';
+			onChunk({ content, reasoning: thinking });
+		}
+
+		for (const toolCall of tool_calls ?? []) {
+			const name = toolCall.function?.name;
+			if (!name) continue;
+
+			const call: ToolCall = {
+				id: toolCall.id || `ollama-${result.toolCalls.length}-${name}`,
+				name,
+				arguments: parseToolArguments(toolCall.function?.arguments)
+			};
+
+			if (!result.toolCalls.some((existing) => existing.id === call.id)) {
+				result.toolCalls.push(call);
+			}
+		}
 	}
 
 	async getModels(): Promise<Model[]> {

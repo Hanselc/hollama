@@ -87,6 +87,11 @@
 </div>
 
 <style lang="postcss">
+	.markdown {
+		@apply min-w-0 max-w-full;
+		overflow-wrap: anywhere;
+	}
+
 	.markdown :global(> *:first-child) {
 		@apply mt-0;
 	}

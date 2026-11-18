@@ -4,6 +4,7 @@ import type { OllamaOptions } from '#lib/chat/ollama.js';
 import { sessionsStore, settingsStore, sortStore } from '#lib/localStorage.js';
 
 import { getLastUsedModels } from './chat';
+import type { ToolCallRecord } from './chat/index.js';
 import type { Knowledge } from './knowledge';
 import type { Model } from './settings';
 import { formatTimestampToNow } from './utils';
@@ -15,6 +16,7 @@ export interface Message {
 	context?: number[];
 	reasoning?: string;
 	images?: { data: string; filename: string }[]; // Store image data and filename
+	toolCalls?: ToolCallRecord[];
 }
 
 export interface Session {
@@ -25,6 +27,7 @@ export interface Session {
 	model?: Model;
 	updatedAt?: string;
 	title?: string;
+	webBrowsing?: boolean;
 }
 
 export interface Editor {
@@ -38,6 +41,7 @@ export interface Editor {
 	attachments?: { type: 'image'; id: string; name: string; dataUrl: string }[];
 	completion?: string;
 	reasoning?: string;
+	toolCalls?: ToolCallRecord[];
 	promptTextarea?: HTMLTextAreaElement;
 	abortController?: AbortController;
 }
@@ -79,7 +83,8 @@ export const loadSession = (id: string): Session => {
 			systemPrompt: defaultSystemPrompt,
 			updatedAt: new Date().toISOString(),
 			messages: [],
-			options: {}
+			options: {},
+			webBrowsing: false
 		};
 	}
 

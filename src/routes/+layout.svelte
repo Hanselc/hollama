@@ -132,7 +132,7 @@
 	<!-- Messages aren't reactive, so re-render everything when the language changes -->
 	{#key $settingsStore.userLanguage}
 		<CollapsibleSidebar />
-		<div class="relative flex-1">
+		<div class="relative min-w-0 flex-1">
 			<SidebarToggle />
 			{@render children()}
 		</div>
